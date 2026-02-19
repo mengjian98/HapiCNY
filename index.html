@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Card Point Calculator</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="score-panel" aria-live="polite" aria-atomic="true">
+        <p id="score" class="score-value">0</p>
+      </section>
+
+      <section class="controls" aria-label="Point controls">
+        <div class="left-quick">
+          <button id="plus-1x" class="btn btn-small btn-green" type="button">+ 1x</button>
+          <label class="base-inline" for="base-amount">
+            <input id="base-amount" type="number" min="1" step="1" inputmode="numeric" />
+          </label>
+          <button id="minus-1x" class="btn btn-small btn-red" type="button">- 1x</button>
+        </div>
+
+        <div class="right-multipliers" id="right-multipliers">
+          <button class="btn btn-multi btn-green" type="button" data-sign="1" data-multiplier="2">+ 2x</button>
+          <button class="btn btn-multi btn-red" type="button" data-sign="-1" data-multiplier="2">- 2x</button>
+          <button class="btn btn-multi btn-green" type="button" data-sign="1" data-multiplier="3">+ 3x</button>
+          <button class="btn btn-multi btn-red" type="button" data-sign="-1" data-multiplier="3">- 3x</button>
+          <button class="btn btn-multi btn-green" type="button" data-sign="1" data-multiplier="4">+ 4x</button>
+          <button class="btn btn-multi btn-red" type="button" data-sign="-1" data-multiplier="4">- 4x</button>
+          <button class="btn btn-multi btn-green" type="button" data-sign="1" data-multiplier="5">+ 5x</button>
+          <button class="btn btn-multi btn-red" type="button" data-sign="-1" data-multiplier="5">- 5x</button>
+          <button class="btn btn-multi btn-green" type="button" data-sign="1" data-multiplier="6">+ 6x</button>
+          <button class="btn btn-multi btn-red" type="button" data-sign="-1" data-multiplier="6">- 6x</button>
+          <button class="btn btn-multi btn-green" type="button" data-sign="1" data-multiplier="7">+ 7x</button>
+          <button class="btn btn-multi btn-red" type="button" data-sign="-1" data-multiplier="7">- 7x</button>
+          <button class="btn btn-multi btn-green" type="button" data-sign="1" data-multiplier="8">+ 8x</button>
+          <button class="btn btn-multi btn-red" type="button" data-sign="-1" data-multiplier="8">- 8x</button>
+        </div>
+      </section>
+
+      <section class="history" aria-label="Point history">
+        <div class="history-head">
+          <h2>History</h2>
+          <div class="history-actions">
+            <button id="toggle-history" class="ghost-btn" type="button">Expand</button>
+            <button id="done-session" class="ghost-btn" type="button">End Session</button>
+            <button id="clear-history" class="ghost-btn" type="button">Clear</button>
+          </div>
+        </div>
+        <ul id="history-list" class="history-list"></ul>
+      </section>
+    </main>
+
+    <button id="quick-calc-toggle" class="quick-calc-fab" type="button">牛</button>
+
+    <section id="quick-calc-drawer" class="quick-calc-drawer" aria-label="Quick calculator" aria-hidden="true">
+      <div class="quick-calc-panel">
+        <div class="quick-calc-head">
+          <h2>Niu Helper</h2>
+          <button id="quick-calc-close" class="ghost-btn" type="button">Close</button>
+        </div>
+        <div id="niu-selected-cards" class="niu-selected-cards"></div>
+        <div id="niu-rank-buttons" class="niu-rank-buttons">
+          <button class="ghost-btn" type="button" data-card-type="2">2</button>
+          <button class="ghost-btn" type="button" data-card-type="3">3</button>
+          <button class="ghost-btn" type="button" data-card-type="4">4</button>
+          <button class="ghost-btn" type="button" data-card-type="5">5</button>
+          <button class="ghost-btn" type="button" data-card-type="6">6</button>
+          <button class="ghost-btn" type="button" data-card-type="7">7</button>
+          <button class="ghost-btn" type="button" data-card-type="8">8</button>
+          <button class="ghost-btn" type="button" data-card-type="9">9</button>
+          <button class="ghost-btn" type="button" data-card-type="10">0</button>
+          <button class="ghost-btn" type="button" data-card-type="J">J</button>
+          <button class="ghost-btn" type="button" data-card-type="Q">Q</button>
+          <button class="ghost-btn" type="button" data-card-type="K">K</button>
+          <button class="ghost-btn niu-span-2" type="button" data-card-type="A">A</button>
+          <button class="ghost-btn" type="button" data-card-type="AS">A♠</button>
+        </div>
+        <div id="niu-status" class="niu-status"></div>
+        <div class="niu-add-row">
+          <button id="niu-undo-card" class="ghost-btn quick-calc-action" type="button">Undo</button>
+          <button id="niu-clear-cards" class="ghost-btn quick-calc-action" type="button">Clear</button>
+        </div>
+      </div>
+    </section>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
