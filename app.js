@@ -627,6 +627,8 @@ function debugLog(msg, isError) {
 
 function enableNoSleep() {
   debugLog("[NoSleep] attempting enable...");
+  debugLog("[NoSleep] secure context: " + window.isSecureContext);
+  debugLog("[NoSleep] document.visibilityState: " + document.visibilityState);
   debugLog("[NoSleep] wakeLock API available: " + ("wakeLock" in navigator));
   debugLog("[NoSleep] noSleepVideo exists: " + !!noSleep.noSleepVideo);
   debugLog("[NoSleep] noSleepTimer exists: " + !!noSleep.noSleepTimer);
@@ -638,6 +640,21 @@ function enableNoSleep() {
     }
   }).catch((err) => {
     debugLog("[NoSleep] enable failed: " + err, true);
+    debugLog("[NoSleep] retrying with wakeLock API directly...");
+    if ("wakeLock" in navigator) {
+      navigator.wakeLock.request("screen").then((lock) => {
+        debugLog("[NoSleep] wakeLock acquired directly!");
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") {
+            navigator.wakeLock.request("screen").then((newLock) => {
+              debugLog("[NoSleep] wakeLock re-acquired after visibility change");
+            }).catch((e) => debugLog("[NoSleep] re-acquire failed: " + e, true));
+          }
+        });
+      }).catch((e) => {
+        debugLog("[NoSleep] direct wakeLock also failed: " + e, true);
+      });
+    }
   });
 }
 
@@ -895,8 +912,9 @@ historyBackdropEl.addEventListener("click", () => {
 
 render();
 
-document.addEventListener("pointerdown", function onFirstGesture() {
-  document.removeEventListener("pointerdown", onFirstGesture);
+document.addEventListener("click", function onFirstGesture() {
+  document.removeEventListener("click", onFirstGesture);
+  debugLog("[NoSleep] triggered by user click");
   enableNoSleep();
 }, { once: true });
 
