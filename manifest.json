@@ -1,0 +1,16 @@
+{
+  "name": "Card Point Calculator",
+  "short_name": "CardCalc",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect width='128' height='128' rx='24' fill='%23000'/><text x='64' y='88' font-size='72' text-anchor='middle' fill='%23f8fafc' font-family='sans-serif' font-weight='700'>牛</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

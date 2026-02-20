@@ -3,7 +3,7 @@ const FAB_POS_KEY = "card-point-calculator-fab-pos-v1";
 
 const DEFAULT_STATE = {
   score: 0,
-  baseAmount: 10,
+  baseAmount: 1,
   sessionNumber: 1,
   sessionStartedAt: new Date().toISOString(),
   sessionPendingStart: false,
@@ -33,6 +33,37 @@ const niuStatusEl = document.getElementById("niu-status");
 const niuUndoCardBtn = document.getElementById("niu-undo-card");
 const niuClearCardsBtn = document.getElementById("niu-clear-cards");
 const niuSelectedCardsEl = document.getElementById("niu-selected-cards");
+const confirmDialogEl = document.getElementById("confirm-dialog");
+const confirmMessageEl = document.getElementById("confirm-message");
+const confirmOkBtn = document.getElementById("confirm-ok");
+const confirmCancelBtn = document.getElementById("confirm-cancel");
+
+function showConfirm(message) {
+  return new Promise((resolve) => {
+    confirmMessageEl.textContent = message;
+    confirmDialogEl.classList.add("visible");
+    confirmDialogEl.setAttribute("aria-hidden", "false");
+    confirmOkBtn.focus();
+
+    function cleanup(result) {
+      confirmOkBtn.removeEventListener("click", onOk);
+      confirmCancelBtn.removeEventListener("click", onCancel);
+      confirmDialogEl.removeEventListener("click", onBackdrop);
+      confirmDialogEl.classList.remove("visible");
+      confirmDialogEl.setAttribute("aria-hidden", "true");
+      resolve(result);
+    }
+
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    function onBackdrop(e) { if (e.target === confirmDialogEl) cleanup(false); }
+
+    confirmOkBtn.addEventListener("click", onOk);
+    confirmCancelBtn.addEventListener("click", onCancel);
+    confirmDialogEl.addEventListener("click", onBackdrop);
+  });
+}
+
 let wakeLockSentinel = null;
 let lastRenderedScore = state.score;
 let lastTopHistoryId = state.history[0]?.id ?? null;
@@ -47,6 +78,8 @@ let fabDidDrag = false;
 let suppressFabClick = false;
 let drawerDragStartY = null;
 let drawerDragOffsetY = 0;
+let swipeOpenId = null;
+let swipeTrack = null;
 
 function loadState() {
   try {
@@ -93,17 +126,6 @@ function formatSigned(value) {
 function formatTime(iso) {
   const d = new Date(iso);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-function formatDateTime(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString([], {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
 }
 
 function formatDate(iso) {
@@ -199,6 +221,7 @@ function applyChange(multiplier, sign, source) {
 }
 
 function renderHistory(animateId = null) {
+  swipeOpenId = null;
   if (!state.history.length) {
     historyListEl.innerHTML = '<li class="history-item history-empty"><span>No history yet</span></li>';
     return;
@@ -210,22 +233,25 @@ function renderHistory(animateId = null) {
       const isExpanded = expandedSessions.has(group.id);
       const netClass = group.net >= 0 ? "plus" : "minus";
       const statusText = group.isDone ? "done" : group.isCurrent ? "current" : "";
-      const sessionLabel = formatSessionLabel(group.startedAt, group.endedAt);
+      const sessionLabel = formatSessionLabel(group.startedAt);
 
       const changeRows = group.changes
         .map((item) => {
           const deltaClass = item.delta >= 0 ? "plus" : "minus";
           const enterClass = animateId && animateId === item.id ? "history-enter" : "";
           return `
-            <li class="history-item ${enterClass}">
-              <div class="history-main">
-                <span class="delta ${deltaClass}">${formatSigned(item.delta)}</span>
-                <span class="history-multiplier">${item.multiplier}x</span>
+            <li class="history-swipe-wrapper ${enterClass}" data-history-id="${item.id}">
+              <div class="history-item history-swipe-content">
+                <div class="history-main">
+                  <span class="delta ${deltaClass}">${formatSigned(item.delta)}</span>
+                  <span class="history-multiplier">${item.multiplier}x</span>
+                </div>
+                <div class="history-meta">
+                  <span class="history-result">${item.result}</span>
+                  <span>${formatTime(item.at)}</span>
+                </div>
               </div>
-              <div class="history-meta">
-                <span class="history-result">${item.result}</span>
-                <span>${formatTime(item.at)}</span>
-              </div>
+              <button class="history-delete-btn" type="button">Delete</button>
             </li>
           `;
         })
@@ -479,12 +505,13 @@ function evaluateBestNiuHand(cards) {
   return best;
 }
 
-function renderCardRow(cards, rowClass) {
+function renderCardRow(cards, rowClass, rearranged = false) {
   if (!cards.length) return "";
+  const extraClass = rearranged ? "card-rearrange" : "";
   const items = cards
     .map(
       (card) => `
-      <button class="niu-card-item" type="button" data-remove-card="${card.id}">
+      <button class="niu-card-item ${extraClass}" type="button" data-remove-card="${card.id}">
         <span>${cardLabel(card)}</span>
       </button>
     `
@@ -507,8 +534,9 @@ function renderNiuCards() {
       const isGoldHand = best.category === 3 || best.category === 2 || best.niu === 10;
       niuSelectedCardsEl.classList.add(isGoldHand ? "state-gold" : "state-valid");
       niuSelectedCardsEl.innerHTML = `
-        ${renderCardRow(best.top, "top")}
-        ${renderCardRow(best.bottom, "bottom")}
+        <div class="niu-hand-label">${best.title}</div>
+        ${renderCardRow(best.top, "top", true)}
+        ${renderCardRow(best.bottom, "bottom", true)}
       `;
       return;
     }
@@ -589,10 +617,14 @@ function animateScoreIfChanged() {
 
 async function requestWakeLock() {
   if (!("wakeLock" in navigator)) return false;
+  if (document.visibilityState !== "visible") return false;
   try {
     wakeLockSentinel = await navigator.wakeLock.request("screen");
     wakeLockSentinel.addEventListener("release", () => {
       wakeLockSentinel = null;
+      if (document.visibilityState === "visible") {
+        requestWakeLock();
+      }
     });
     return true;
   } catch {
@@ -601,8 +633,74 @@ async function requestWakeLock() {
   }
 }
 
+const allTimeStatsEl = document.getElementById("all-time-stats");
+
+function renderAllTimeStats() {
+  let totalEarned = 0;
+  let totalLost = 0;
+  for (const item of state.history) {
+    if (item.type !== "change") continue;
+    if (item.delta > 0) totalEarned += item.delta;
+    else totalLost += Math.abs(item.delta);
+  }
+  if (totalEarned === 0 && totalLost === 0) {
+    allTimeStatsEl.innerHTML = "";
+    return;
+  }
+  const totalNet = totalEarned - totalLost;
+  allTimeStatsEl.innerHTML = `
+    <span class="stat-earned">+${totalEarned}</span>
+    <span class="stat-lost">−${totalLost}</span>
+    <span class="stat-net">Net: ${formatSigned(totalNet)}</span>
+  `;
+}
+
+function closeOpenSwipe() {
+  if (!swipeOpenId) return;
+  const wrapper = historyListEl.querySelector(`[data-history-id="${swipeOpenId}"]`);
+  if (wrapper) {
+    const content = wrapper.querySelector(".history-swipe-content");
+    if (content) {
+      content.classList.remove("swiping");
+      content.style.transform = "";
+    }
+  }
+  swipeOpenId = null;
+}
+
+function deleteHistoryEntry(id) {
+  const idx = state.history.findIndex((item) => item.id === id);
+  if (idx === -1) return;
+
+  const entry = state.history[idx];
+  if (entry.type !== "change") return;
+
+  const isCurrentSession = entry.session === state.sessionNumber && !state.sessionPendingStart;
+
+  if (isCurrentSession) {
+    state.score -= entry.delta;
+    if (entry.delta > 0) state.sessionEarned = Math.max(0, state.sessionEarned - entry.delta);
+    if (entry.delta < 0) state.sessionLost = Math.max(0, state.sessionLost - Math.abs(entry.delta));
+  } else {
+    const summary = state.history.find(
+      (item) => item.type === "session" && item.session === entry.session
+    );
+    if (summary) {
+      if (entry.delta > 0) summary.earned = Math.max(0, (summary.earned || 0) - entry.delta);
+      if (entry.delta < 0) summary.lost = Math.max(0, (summary.lost || 0) - Math.abs(entry.delta));
+      summary.net = (summary.earned || 0) - (summary.lost || 0);
+    }
+  }
+
+  state.history.splice(idx, 1);
+  swipeOpenId = null;
+  saveState();
+  render();
+}
+
 function render() {
   scoreEl.textContent = String(state.score);
+
   const currentTopHistoryId = state.history[0]?.id ?? null;
   const animateHistoryId =
     currentTopHistoryId && currentTopHistoryId !== lastTopHistoryId ? currentTopHistoryId : null;
@@ -610,6 +708,7 @@ function render() {
   lastTopHistoryId = currentTopHistoryId;
   renderBaseAmount();
   animateScoreIfChanged();
+  renderAllTimeStats();
 }
 
 plus1xBtn.addEventListener("click", () => applyChange(1, 1, "plus1x"));
@@ -630,8 +729,8 @@ baseAmountInput.addEventListener("change", () => {
   render();
 });
 
-clearHistoryBtn.addEventListener("click", () => {
-  const ok = window.confirm("Clear all history?");
+clearHistoryBtn.addEventListener("click", async () => {
+  const ok = await showConfirm("Clear all history?");
   if (!ok) return;
   state.score = 0;
   state.sessionNumber = 1;
@@ -646,9 +745,9 @@ clearHistoryBtn.addEventListener("click", () => {
   render();
 });
 
-doneSessionBtn.addEventListener("click", () => {
+doneSessionBtn.addEventListener("click", async () => {
   if (state.sessionPendingStart) return;
-  const ok = window.confirm("End current session?");
+  const ok = await showConfirm("End current session?");
   if (!ok) return;
 
   const net = state.sessionEarned - state.sessionLost;
@@ -677,6 +776,19 @@ doneSessionBtn.addEventListener("click", () => {
 historyListEl.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
+
+  const deleteBtn = target.closest(".history-delete-btn");
+  if (deleteBtn) {
+    const wrapper = deleteBtn.closest(".history-swipe-wrapper");
+    if (wrapper) deleteHistoryEntry(wrapper.dataset.historyId);
+    return;
+  }
+
+  if (swipeOpenId) {
+    closeOpenSwipe();
+    return;
+  }
+
   const toggle = target.closest(".session-toggle");
   if (!(toggle instanceof HTMLButtonElement)) return;
   const sessionId = clamp(toInteger(toggle.dataset.session, state.sessionNumber), 1, 999999);
@@ -688,10 +800,89 @@ historyListEl.addEventListener("click", (event) => {
   render();
 });
 
+historyListEl.addEventListener("touchstart", (e) => {
+  if (e.target.closest(".history-delete-btn")) return;
+  const wrapper = e.target.closest(".history-swipe-wrapper");
+  if (!wrapper) return;
+
+  const touch = e.touches[0];
+  const contentEl = wrapper.querySelector(".history-swipe-content");
+  if (!contentEl) return;
+
+  swipeTrack = {
+    startX: touch.clientX,
+    startY: touch.clientY,
+    id: wrapper.dataset.historyId,
+    contentEl,
+    locked: null,
+    currentX: 0
+  };
+}, { passive: true });
+
+historyListEl.addEventListener("touchmove", (e) => {
+  if (!swipeTrack) return;
+
+  const touch = e.touches[0];
+  const dx = touch.clientX - swipeTrack.startX;
+  const dy = touch.clientY - swipeTrack.startY;
+
+  if (swipeTrack.locked === null) {
+    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+      swipeTrack.locked = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+      if (swipeTrack.locked === "h") {
+        swipeTrack.contentEl.classList.add("swiping");
+        if (swipeOpenId && swipeOpenId !== swipeTrack.id) closeOpenSwipe();
+      }
+    }
+    return;
+  }
+
+  if (swipeTrack.locked !== "h") return;
+
+  const baseX = swipeOpenId === swipeTrack.id ? -76 : 0;
+  const translateX = Math.min(0, Math.max(-76, baseX + dx));
+  swipeTrack.currentX = translateX;
+  swipeTrack.contentEl.style.transform = `translateX(${translateX}px)`;
+}, { passive: true });
+
+historyListEl.addEventListener("touchend", () => {
+  if (!swipeTrack) return;
+  const track = swipeTrack;
+  swipeTrack = null;
+
+  if (track.locked !== "h") return;
+
+  track.contentEl.classList.remove("swiping");
+
+  if (track.currentX <= -38) {
+    track.contentEl.style.transform = "translateX(-76px)";
+    swipeOpenId = track.id;
+  } else {
+    track.contentEl.style.transform = "";
+    if (swipeOpenId === track.id) swipeOpenId = null;
+  }
+});
+
+historyListEl.addEventListener("touchcancel", () => {
+  if (!swipeTrack) return;
+  swipeTrack.contentEl.classList.remove("swiping");
+  swipeTrack.contentEl.style.transform = swipeOpenId === swipeTrack.id ? "translateX(-76px)" : "";
+  swipeTrack = null;
+});
+
+const historyBackdropEl = document.getElementById("history-backdrop");
+
 toggleHistoryBtn.addEventListener("click", () => {
   historySectionEl.classList.toggle("expanded");
   const expanded = historySectionEl.classList.contains("expanded");
   toggleHistoryBtn.textContent = expanded ? "Collapse" : "Expand";
+  historyBackdropEl.classList.toggle("visible", expanded);
+});
+
+historyBackdropEl.addEventListener("click", () => {
+  historySectionEl.classList.remove("expanded");
+  toggleHistoryBtn.textContent = "Expand";
+  historyBackdropEl.classList.remove("visible");
 });
 
 document.addEventListener("visibilitychange", async () => {
@@ -704,6 +895,10 @@ render();
 requestWakeLock();
 renderNiuHelper();
 restoreFabPosition();
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js");
+}
 
 quickCalcToggleBtn.addEventListener("click", () => {
   if (suppressFabClick) {
@@ -768,3 +963,221 @@ niuSelectedCardsEl.addEventListener("click", (event) => {
   niuSelectedCards = niuSelectedCards.filter((card) => card.id !== id);
   renderNiuHelper();
 });
+
+// ── Tutorial ────────────────────────────────────────
+const TUTORIAL_SEEN_KEY = "card-point-calculator-tutorial-seen-v1";
+
+const tutorialSteps = [
+  {
+    target: ".score-panel",
+    title: "Your Score",
+    desc: "This is your current point total. It updates in real time as you win or lose rounds. Below it you'll see all-time stats once you start playing.",
+    position: "below"
+  },
+  {
+    target: ".base-inline",
+    title: "Set Your Base Bet",
+    desc: "Enter the base amount for each round. All the multiplier buttons use this value. Tap the number to change it.",
+    position: "right"
+  },
+  {
+    target: "#plus-1x",
+    title: "Quick +1x",
+    desc: "Tap this to add 1\u00d7 your base amount to the score. Use it for simple 1\u00d7 wins.",
+    position: "right"
+  },
+  {
+    target: "#minus-1x",
+    title: "Quick \u22121x",
+    desc: "Tap this to subtract 1\u00d7 your base amount. Use it for simple 1\u00d7 losses.",
+    position: "right"
+  },
+  {
+    target: ".right-multipliers",
+    title: "Multiplier Buttons",
+    desc: "Green buttons add, red buttons subtract. Each pair is a multiplier (2x\u20138x) applied to your base bet. For example, if base is 100 and you tap +3x, you gain 300.",
+    position: "left"
+  },
+  {
+    target: ".history",
+    title: "History & Sessions",
+    desc: "All your point changes appear here, grouped by session. Tap \"Expand\" for full screen view. Swipe left on any entry to delete it.",
+    position: "above"
+  },
+  {
+    target: "#done-session",
+    title: "End Session",
+    desc: "Tap this when you're done playing. It saves the session summary, resets your score to 0, and starts a new session.",
+    position: "below"
+  },
+  {
+    target: ".quick-calc-fab",
+    title: "Niu Niu Helper (\u725b)",
+    desc: "Tap this floating button to open the Niu Niu hand evaluator. Pick 5 cards and it will find the best hand combination for you. You can drag this button around the screen.",
+    position: "left"
+  },
+  {
+    target: ".help-fab",
+    title: "That's It!",
+    desc: "You're all set! Your data saves automatically in the browser. Tap the \"?\" button anytime to replay this tutorial. Enjoy the game!",
+    position: "right"
+  }
+];
+
+const tutorialOverlay = document.getElementById("tutorial-overlay");
+const tutorialSpotlight = document.getElementById("tutorial-spotlight");
+const tutorialTooltip = document.getElementById("tutorial-tooltip");
+const tutorialTitle = document.getElementById("tutorial-title");
+const tutorialDesc = document.getElementById("tutorial-desc");
+const tutorialStepIndicator = document.getElementById("tutorial-step-indicator");
+const tutorialNextBtn = document.getElementById("tutorial-next");
+const tutorialPrevBtn = document.getElementById("tutorial-prev");
+const tutorialSkipBtn = document.getElementById("tutorial-skip");
+const helpBtn = document.getElementById("help-btn");
+
+let tutorialCurrentStep = 0;
+
+function buildDots() {
+  tutorialStepIndicator.innerHTML = tutorialSteps
+    .map((_, i) => `<span class="tutorial-dot" data-dot="${i}"></span>`)
+    .join("");
+}
+
+function updateDots(stepIndex) {
+  const dots = tutorialStepIndicator.querySelectorAll(".tutorial-dot");
+  dots.forEach((dot, i) => {
+    dot.classList.toggle("active", i === stepIndex);
+    dot.classList.toggle("done", i < stepIndex);
+  });
+}
+
+function computeTooltipPos(targetRect, position, tooltipW, tooltipH) {
+  const pad = 14;
+  let top, left;
+  switch (position) {
+    case "below":
+      top = targetRect.bottom + pad;
+      left = targetRect.left + targetRect.width / 2 - tooltipW / 2;
+      break;
+    case "above":
+      top = targetRect.top - tooltipH - pad;
+      left = targetRect.left + targetRect.width / 2 - tooltipW / 2;
+      break;
+    case "left":
+      top = targetRect.top + targetRect.height / 2 - tooltipH / 2;
+      left = targetRect.left - tooltipW - pad;
+      break;
+    case "right":
+      top = targetRect.top + targetRect.height / 2 - tooltipH / 2;
+      left = targetRect.right + pad;
+      break;
+  }
+  left = Math.max(14, Math.min(left, window.innerWidth - tooltipW - 14));
+  top = Math.max(14, Math.min(top, window.innerHeight - tooltipH - 14));
+  return { top, left };
+}
+
+function rectsOverlap(a, b) {
+  return !(a.left >= b.right || a.right <= b.left || a.top >= b.bottom || a.bottom <= b.top);
+}
+
+function positionTooltip(targetRect, preferredPos) {
+  const tooltipW = tutorialTooltip.offsetWidth;
+  const tooltipH = tutorialTooltip.offsetHeight;
+  const spotPad = 6;
+  const spotRect = {
+    top: targetRect.top - spotPad,
+    left: targetRect.left - spotPad,
+    right: targetRect.right + spotPad,
+    bottom: targetRect.bottom + spotPad
+  };
+
+  const order = [preferredPos, "below", "above", "right", "left"].filter(
+    (v, i, arr) => arr.indexOf(v) === i
+  );
+
+  for (const pos of order) {
+    const { top, left } = computeTooltipPos(targetRect, pos, tooltipW, tooltipH);
+    const tipRect = { top, left, right: left + tooltipW, bottom: top + tooltipH };
+    if (!rectsOverlap(tipRect, spotRect)) {
+      tutorialTooltip.style.top = `${top}px`;
+      tutorialTooltip.style.left = `${left}px`;
+      return;
+    }
+  }
+
+  const fallback = computeTooltipPos(targetRect, "below", tooltipW, tooltipH);
+  tutorialTooltip.style.top = `${fallback.top}px`;
+  tutorialTooltip.style.left = `${fallback.left}px`;
+}
+
+function showTutorialStep(index) {
+  tutorialCurrentStep = index;
+  const step = tutorialSteps[index];
+  const el = document.querySelector(step.target);
+
+  if (!el) return;
+
+  const rect = el.getBoundingClientRect();
+  const spotPad = 6;
+
+  tutorialSpotlight.style.top = `${rect.top - spotPad}px`;
+  tutorialSpotlight.style.left = `${rect.left - spotPad}px`;
+  tutorialSpotlight.style.width = `${rect.width + spotPad * 2}px`;
+  tutorialSpotlight.style.height = `${rect.height + spotPad * 2}px`;
+  tutorialSpotlight.classList.toggle("pulse", index === 0);
+
+  tutorialTitle.textContent = step.title;
+  tutorialDesc.textContent = step.desc;
+  updateDots(index);
+
+  tutorialPrevBtn.style.display = index === 0 ? "none" : "";
+  tutorialNextBtn.textContent = index === tutorialSteps.length - 1 ? "Done" : "Next";
+  tutorialSkipBtn.style.display = index === tutorialSteps.length - 1 ? "none" : "";
+
+  requestAnimationFrame(() => positionTooltip(rect, step.position));
+}
+
+function startTutorial() {
+  buildDots();
+  tutorialOverlay.classList.add("active");
+  tutorialOverlay.setAttribute("aria-hidden", "false");
+  showTutorialStep(0);
+}
+
+function endTutorial() {
+  tutorialOverlay.classList.remove("active");
+  tutorialOverlay.setAttribute("aria-hidden", "true");
+  localStorage.setItem(TUTORIAL_SEEN_KEY, "1");
+}
+
+tutorialNextBtn.addEventListener("click", () => {
+  if (tutorialCurrentStep < tutorialSteps.length - 1) {
+    showTutorialStep(tutorialCurrentStep + 1);
+  } else {
+    endTutorial();
+  }
+});
+
+tutorialPrevBtn.addEventListener("click", () => {
+  if (tutorialCurrentStep > 0) {
+    showTutorialStep(tutorialCurrentStep - 1);
+  }
+});
+
+tutorialSkipBtn.addEventListener("click", endTutorial);
+
+tutorialOverlay.addEventListener("click", (e) => {
+  if (e.target === tutorialOverlay) endTutorial();
+});
+
+helpBtn.addEventListener("click", startTutorial);
+
+window.addEventListener("resize", () => {
+  if (!tutorialOverlay.classList.contains("active")) return;
+  showTutorialStep(tutorialCurrentStep);
+});
+
+if (!localStorage.getItem(TUTORIAL_SEEN_KEY)) {
+  startTutorial();
+}

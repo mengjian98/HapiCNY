@@ -2,20 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Card Point Calculator</title>
+    <meta name="theme-color" content="#000000" />
+    <link rel="manifest" href="./manifest.json" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="app">
       <section class="score-panel" aria-live="polite" aria-atomic="true">
         <p id="score" class="score-value">0</p>
+        <div id="all-time-stats" class="all-time-stats"></div>
       </section>
 
       <section class="controls" aria-label="Point controls">
         <div class="left-quick">
           <button id="plus-1x" class="btn btn-small btn-green" type="button">+ 1x</button>
           <label class="base-inline" for="base-amount">
+            <span class="base-label">Base</span>
             <input id="base-amount" type="number" min="1" step="1" inputmode="numeric" />
           </label>
           <button id="minus-1x" class="btn btn-small btn-red" type="button">- 1x</button>
@@ -39,6 +43,7 @@
         </div>
       </section>
 
+      <div id="history-backdrop" class="history-backdrop"></div>
       <section class="history" aria-label="Point history">
         <div class="history-head">
           <h2>History</h2>
@@ -56,6 +61,7 @@
 
     <section id="quick-calc-drawer" class="quick-calc-drawer" aria-label="Quick calculator" aria-hidden="true">
       <div class="quick-calc-panel">
+        <div class="drawer-handle"><span class="drawer-handle-pill"></span></div>
         <div class="quick-calc-head">
           <h2>Niu Helper</h2>
           <button id="quick-calc-close" class="ghost-btn" type="button">Close</button>
@@ -84,6 +90,34 @@
         </div>
       </div>
     </section>
+
+    <div id="confirm-dialog" class="confirm-backdrop" aria-hidden="true">
+      <div class="confirm-panel">
+        <p id="confirm-message" class="confirm-message"></p>
+        <div class="confirm-actions">
+          <button id="confirm-cancel" class="ghost-btn" type="button">Cancel</button>
+          <button id="confirm-ok" class="ghost-btn btn-danger" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tutorial-overlay" class="tutorial-overlay" aria-hidden="true">
+      <div class="tutorial-spotlight" id="tutorial-spotlight"></div>
+      <div class="tutorial-tooltip" id="tutorial-tooltip">
+        <div class="tutorial-step-indicator" id="tutorial-step-indicator"></div>
+        <h3 class="tutorial-title" id="tutorial-title"></h3>
+        <p class="tutorial-desc" id="tutorial-desc"></p>
+        <div class="tutorial-nav">
+          <button id="tutorial-skip" class="ghost-btn tutorial-btn" type="button">Skip</button>
+          <div class="tutorial-nav-right">
+            <button id="tutorial-prev" class="ghost-btn tutorial-btn" type="button">Back</button>
+            <button id="tutorial-next" class="ghost-btn tutorial-btn tutorial-btn-primary" type="button">Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button id="help-btn" class="help-fab" type="button" aria-label="Tutorial">?</button>
 
     <script src="./app.js"></script>
   </body>
