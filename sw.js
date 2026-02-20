@@ -1,5 +1,5 @@
-const CACHE_NAME = "card-calc-v1";
-const ASSETS = ["./index.html", "./app.js", "./styles.css", "./manifest.json"];
+const CACHE_NAME = "card-calc-v2";
+const ASSETS = ["./index.html", "./app.js", "./styles.css", "./manifest.json", "./nosleep.min.js"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
