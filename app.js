@@ -616,7 +616,19 @@ function animateScoreIfChanged() {
 }
 
 function enableNoSleep() {
-  noSleep.enable().catch(() => {});
+  console.log("[NoSleep] attempting enable...");
+  console.log("[NoSleep] wakeLock API available:", "wakeLock" in navigator);
+  console.log("[NoSleep] noSleepVideo exists:", !!noSleep.noSleepVideo);
+  console.log("[NoSleep] noSleepTimer exists:", !!noSleep.noSleepTimer);
+  noSleep.enable().then(() => {
+    console.log("[NoSleep] enabled successfully, isEnabled:", noSleep.isEnabled);
+    if (noSleep.noSleepVideo) {
+      console.log("[NoSleep] video paused:", noSleep.noSleepVideo.paused);
+      console.log("[NoSleep] video readyState:", noSleep.noSleepVideo.readyState);
+    }
+  }).catch((err) => {
+    console.error("[NoSleep] enable failed:", err);
+  });
 }
 
 const allTimeStatsEl = document.getElementById("all-time-stats");
@@ -881,7 +893,7 @@ document.addEventListener("pointerdown", function onFirstGesture() {
 renderNiuHelper();
 restoreFabPosition();
 
-if ("serviceWorker" in navigator) {
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
   navigator.serviceWorker.register("./sw.js");
 }
 
