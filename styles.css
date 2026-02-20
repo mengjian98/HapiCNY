@@ -31,7 +31,7 @@ body {
   margin: 0 auto;
   padding: max(8px, env(safe-area-inset-top)) 14px max(8px, env(safe-area-inset-bottom));
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 33dvh);
   gap: clamp(6px, 1.2vh, 12px);
   overflow: hidden;
 }

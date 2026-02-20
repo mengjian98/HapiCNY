@@ -66,49 +66,63 @@ function showConfirm(message) {
 
 let wakeLockSentinel = null;
 let noSleepVideo = null;
+let noSleepTimer = null;
+let hadUserGesture = false;
 
-function createNoSleepVideo() {
+function ensureNoSleepVideo() {
   if (noSleepVideo) return noSleepVideo;
-  const mp4Base64 =
-    "AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAChtZGF0AAAB" +
-    "rgYF//+q3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE0OCByMjY0MyA1YzY1NzA0" +
-    "IC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAxNSAtIGh0" +
-    "dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEg" +
-    "cmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9" +
-    "NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNo" +
-    "cm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBm" +
-    "YXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTEgbG9va2FoZWFk" +
-    "X3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxh" +
-    "Y2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0w" +
-    "IHdlaWdodHA9MCBrZXlpbnQ9MjUwIGtleWludF9taW49MjUgc2NlbmVjdXQ9NDAgaW50" +
-    "cmFfcmVmcmVzaD0wIHJjX2xvb2thaGVhZD00MCByYz1jcmYgbWJ0cmVlPTEgY3JmPTIz" +
-    "LjAgcWNvbXA9MC42MCBxcG1pbj0wIHFwbWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEu" +
-    "NDAgYXE9MToxLjAwAIAAAAFPZYiEACD/2lu4PtiAelcgbIelehWMfA/BcIL+HBAAAALAA" +
-    "AAADAF0kgKVATQAAAB9GABAAAAAAP+YhAAQf/+y3/CLf+ph+QF5qAEK";
 
   const v = document.createElement("video");
   v.setAttribute("playsinline", "");
   v.setAttribute("webkit-playsinline", "");
   v.setAttribute("muted", "");
   v.setAttribute("loop", "");
-  v.style.cssText = "position:fixed;top:-1px;left:-1px;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1";
-  v.src = "data:video/mp4;base64," + mp4Base64;
   v.muted = true;
+  v.style.cssText = "position:fixed;top:-1px;left:-1px;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1";
+
+  const webm = document.createElement("source");
+  webm.src = "data:video/webm;base64,GkXfo0AgQoaBAUL3gQFC8oEEQvOBCEKCQAR3ZWJtQoeBAkKFgQIYU4BnQI0VSalmQCgq17FAAw9CQE2AQAZ3aGFtbXlXQUAGd2hhbW15RIlACECPQAAAAAAAFlSua0AxrkAu14EBY8WBAZyBACK1nEADdW5teleBAXPFgQRjxYECb8WBAm/FgQFnyYECY8WBAW/FgQGcgQAitZxgEAAAAAAAABZUrmsAAAAASRIQAAAAAAAFGcWBAR5BAAAAAAAAFlSua0AzrkAu14EBY8WBAZyBACK1nEADdW5teleBAXPFgQRjxYECb8WBAm/FgQFnyYECY8WBAW/FgQGcgQAitZxgEAAAAAAAABZUrmsAAAAASRIQAAAAAAAFGcWBAR5BAAAAAAAAFhTua0BFrkAu14EBY8WBAZyBACK1nEADdW5teleBAXPFgQRjxYECb8WBAm/FgQFnyYECY8WBAW/FgQGcgQAitZhgEAAAAAAAABZUrmsBAAAAARAAAAAAAA=";
+  webm.type = "video/webm";
+  v.appendChild(webm);
+
+  const mp4 = document.createElement("source");
+  mp4.src = "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAu1tZGF0AAACrgYF//+q3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE0OCByMjY0MyA1YzY1NzA0IC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAxNSAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEgcmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTEgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0wIHdlaWdodHA9MCBrZXlpbnQ9MjUwIGtleWludF9taW49MjUgc2NlbmVjdXQ9NDAgaW50cmFfcmVmcmVzaD0wIHJjX2xvb2thaGVhZD00MCByYz1jcmYgbWJ0cmVlPTEgY3JmPTIzLjAgcWNvbXA9MC42MCBxcG1pbj0wIHFwbWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEuNDAgYXE9MToxLjAwAIAAAAFPZYiEACD/2lu4PtiAelcgbIelehWMfA/BcIL+HBAAAALAAAADAF0kgKVATQAAAB9GABAAAAAAP+YhAAQf/+y3/CLf+ph+QF5qAEKAAAABkGaIBAAAAA0QZpAFAAAADRBmmAAAAI5BmoAVAAAAMEGagBAAAAAwQZqgFAAAADRBmsAAAAI5BmukVAAAAMEGa4BAAAAAwQZsAFAAAADRBmyAAAAI5Bm0AVAAAA";
+  mp4.type = "video/mp4";
+  v.appendChild(mp4);
+
+  v.addEventListener("pause", () => {
+    if (document.visibilityState === "visible" && hadUserGesture) {
+      v.play().catch(() => {});
+    }
+  });
+
   document.body.appendChild(v);
   noSleepVideo = v;
   return v;
 }
 
-function startNoSleepFallback() {
-  const v = createNoSleepVideo();
-  const playPromise = v.play();
-  if (playPromise) playPromise.catch(() => {});
+function startNoSleep() {
+  if (!hadUserGesture) return;
+  const v = ensureNoSleepVideo();
+  if (v.paused) v.play().catch(() => {});
+
+  if (!noSleepTimer) {
+    noSleepTimer = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (v.paused) v.play().catch(() => {});
+      if (!wakeLockSentinel) {
+        navigator.wakeLock?.request("screen").then(s => {
+          wakeLockSentinel = s;
+          s.addEventListener("release", () => { wakeLockSentinel = null; });
+        }).catch(() => {});
+      }
+    }, 15000);
+  }
 }
 
-function stopNoSleepFallback() {
-  if (noSleepVideo) {
-    noSleepVideo.pause();
-  }
+function stopNoSleep() {
+  if (noSleepVideo) noSleepVideo.pause();
+  if (noSleepTimer) { clearInterval(noSleepTimer); noSleepTimer = null; }
 }
 let lastRenderedScore = state.score;
 let lastTopHistoryId = state.history[0]?.id ?? null;
@@ -661,26 +675,20 @@ function animateScoreIfChanged() {
 }
 
 async function requestWakeLock() {
-  if (document.visibilityState !== "visible") return false;
+  if (document.visibilityState !== "visible") return;
 
   if ("wakeLock" in navigator) {
     try {
       wakeLockSentinel = await navigator.wakeLock.request("screen");
-      stopNoSleepFallback();
       wakeLockSentinel.addEventListener("release", () => {
         wakeLockSentinel = null;
-        if (document.visibilityState === "visible") {
-          requestWakeLock();
-        }
       });
-      return true;
     } catch {
       wakeLockSentinel = null;
     }
   }
 
-  startNoSleepFallback();
-  return true;
+  startNoSleep();
 }
 
 const allTimeStatsEl = document.getElementById("all-time-stats");
@@ -937,19 +945,19 @@ historyBackdropEl.addEventListener("click", () => {
 
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible") {
-    stopNoSleepFallback();
+    stopNoSleep();
     return;
   }
-  if (wakeLockSentinel) return;
   await requestWakeLock();
 });
 
 render();
 requestWakeLock();
 
-document.addEventListener("touchstart", function enableNoSleep() {
-  document.removeEventListener("touchstart", enableNoSleep);
-  if (!wakeLockSentinel) requestWakeLock();
+document.addEventListener("pointerdown", function onFirstGesture() {
+  document.removeEventListener("pointerdown", onFirstGesture);
+  hadUserGesture = true;
+  requestWakeLock();
 }, { once: true });
 
 renderNiuHelper();
