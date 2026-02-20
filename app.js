@@ -65,6 +65,51 @@ function showConfirm(message) {
 }
 
 let wakeLockSentinel = null;
+let noSleepVideo = null;
+
+function createNoSleepVideo() {
+  if (noSleepVideo) return noSleepVideo;
+  const mp4Base64 =
+    "AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAChtZGF0AAAB" +
+    "rgYF//+q3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE0OCByMjY0MyA1YzY1NzA0" +
+    "IC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAxNSAtIGh0" +
+    "dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEg" +
+    "cmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9" +
+    "NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNo" +
+    "cm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBm" +
+    "YXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTEgbG9va2FoZWFk" +
+    "X3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxh" +
+    "Y2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0w" +
+    "IHdlaWdodHA9MCBrZXlpbnQ9MjUwIGtleWludF9taW49MjUgc2NlbmVjdXQ9NDAgaW50" +
+    "cmFfcmVmcmVzaD0wIHJjX2xvb2thaGVhZD00MCByYz1jcmYgbWJ0cmVlPTEgY3JmPTIz" +
+    "LjAgcWNvbXA9MC42MCBxcG1pbj0wIHFwbWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEu" +
+    "NDAgYXE9MToxLjAwAIAAAAFPZYiEACD/2lu4PtiAelcgbIelehWMfA/BcIL+HBAAAALAA" +
+    "AAADAF0kgKVATQAAAB9GABAAAAAAP+YhAAQf/+y3/CLf+ph+QF5qAEK";
+
+  const v = document.createElement("video");
+  v.setAttribute("playsinline", "");
+  v.setAttribute("webkit-playsinline", "");
+  v.setAttribute("muted", "");
+  v.setAttribute("loop", "");
+  v.style.cssText = "position:fixed;top:-1px;left:-1px;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1";
+  v.src = "data:video/mp4;base64," + mp4Base64;
+  v.muted = true;
+  document.body.appendChild(v);
+  noSleepVideo = v;
+  return v;
+}
+
+function startNoSleepFallback() {
+  const v = createNoSleepVideo();
+  const playPromise = v.play();
+  if (playPromise) playPromise.catch(() => {});
+}
+
+function stopNoSleepFallback() {
+  if (noSleepVideo) {
+    noSleepVideo.pause();
+  }
+}
 let lastRenderedScore = state.score;
 let lastTopHistoryId = state.history[0]?.id ?? null;
 const expandedSessions = new Set([state.sessionNumber]);
@@ -616,21 +661,26 @@ function animateScoreIfChanged() {
 }
 
 async function requestWakeLock() {
-  if (!("wakeLock" in navigator)) return false;
   if (document.visibilityState !== "visible") return false;
-  try {
-    wakeLockSentinel = await navigator.wakeLock.request("screen");
-    wakeLockSentinel.addEventListener("release", () => {
+
+  if ("wakeLock" in navigator) {
+    try {
+      wakeLockSentinel = await navigator.wakeLock.request("screen");
+      stopNoSleepFallback();
+      wakeLockSentinel.addEventListener("release", () => {
+        wakeLockSentinel = null;
+        if (document.visibilityState === "visible") {
+          requestWakeLock();
+        }
+      });
+      return true;
+    } catch {
       wakeLockSentinel = null;
-      if (document.visibilityState === "visible") {
-        requestWakeLock();
-      }
-    });
-    return true;
-  } catch {
-    wakeLockSentinel = null;
-    return false;
+    }
   }
+
+  startNoSleepFallback();
+  return true;
 }
 
 const allTimeStatsEl = document.getElementById("all-time-stats");
@@ -886,13 +936,22 @@ historyBackdropEl.addEventListener("click", () => {
 });
 
 document.addEventListener("visibilitychange", async () => {
-  if (document.visibilityState !== "visible") return;
+  if (document.visibilityState !== "visible") {
+    stopNoSleepFallback();
+    return;
+  }
   if (wakeLockSentinel) return;
   await requestWakeLock();
 });
 
 render();
 requestWakeLock();
+
+document.addEventListener("touchstart", function enableNoSleep() {
+  document.removeEventListener("touchstart", enableNoSleep);
+  if (!wakeLockSentinel) requestWakeLock();
+}, { once: true });
+
 renderNiuHelper();
 restoreFabPosition();
 
