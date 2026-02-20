@@ -991,3 +991,28 @@ body {
     transition: none !important;
   }
 }
+
+.debug-overlay {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 30vh;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.85);
+  color: #0f0;
+  font: 11px/1.4 "Courier New", monospace;
+  padding: 8px 10px;
+  z-index: 99999;
+  pointer-events: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.debug-overlay:empty {
+  display: none;
+}
+
+.debug-overlay .debug-err {
+  color: #f44;
+}
