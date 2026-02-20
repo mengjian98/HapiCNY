@@ -1009,6 +1009,7 @@ body {
   word-break: break-all;
 }
 
+.debug-overlay.hidden,
 .debug-overlay:empty {
   display: none;
 }

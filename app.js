@@ -616,6 +616,7 @@ function animateScoreIfChanged() {
 }
 
 const debugOverlay = document.getElementById("debug-overlay");
+debugOverlay.classList.add("hidden");
 
 function debugLog(msg, isError) {
   const line = document.createElement("div");
@@ -624,6 +625,13 @@ function debugLog(msg, isError) {
   debugOverlay.appendChild(line);
   debugOverlay.scrollTop = debugOverlay.scrollHeight;
 }
+
+baseAmountInput.addEventListener("input", () => {
+  if (baseAmountInput.value === "0000") {
+    debugOverlay.classList.toggle("hidden");
+    baseAmountInput.value = String(state.baseAmount);
+  }
+});
 
 function enableNoSleep() {
   debugLog("[NoSleep] attempting enable...");
